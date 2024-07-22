@@ -46,6 +46,17 @@ class Netif:
                 self.lwip.tcpip_input,
             )
 
+    def remove(self):
+        """
+        See netif_remove.
+
+        Removes the interface from the stack. Note that this will not
+        destroy the interface, it can be later added again with the
+        same or a different IP address.
+        """
+        with TcpIpCoreLock(self.lwip):
+            self.lwip.netif_remove(self.netif)
+
     def set_up(self):
         """
         See netif_set_up.

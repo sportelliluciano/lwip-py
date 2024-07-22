@@ -6,6 +6,7 @@ import threading
 
 from lwip import LwIP, NetifDriver
 from lwip.defs import *
+from lwip.lwip_error import LwipError
 
 lwip = LwIP()
 
@@ -15,6 +16,7 @@ CUSTOM_NETIF_IP = "10.0.0.1"
 class TestNetifDriver(NetifDriver):
     def __init__(self):
         self.netif = None
+        self.packets = []
 
     def lwip_on_init(self, netif):
         print("Called lwip_on_init")
@@ -23,6 +25,7 @@ class TestNetifDriver(NetifDriver):
 
     def lwip_on_output(self, payload: bytes, dst_ip: int):
         print(f"Called lwip_on_output({payload=}, {dst_ip=})")
+        self.packets.append((payload, dst_ip))
         return ERR_OK
 
     def push_delayed(self, payload: bytes, delay: float):
@@ -32,9 +35,10 @@ class TestNetifDriver(NetifDriver):
         threading.Timer(delay, lambda: self.netif.input(payload)).start()
 
 
-def add_netif():
-    print("Creating new netif")
-    netif = lwip.create_netif(TestNetifDriver())
+def add_netif(netif=None):
+    if not netif:
+        print("Creating new netif")
+        netif = lwip.create_netif(TestNetifDriver())
 
     print("Adding netif to stack")
     netif.add(CUSTOM_NETIF_IP, "255.0.0.0", CUSTOM_NETIF_IP)
@@ -83,10 +87,34 @@ def test_main():
     netif = add_netif()
 
     # Try to send data
+    assert len(netif.driver.packets) == 0
     send_udp()
+    assert len(netif.driver.packets) == 1
 
     # Try data input
     wait_udp(netif.driver)
+
+    # Remove the interface
+    netif.remove()
+
+    # Send traffic and ensure it does not get to the interface
+    netif.driver.packets = []
+
+    assert len(netif.driver.packets) == 0
+    try:
+        send_udp()
+    except LwipError:
+        pass  # It's OK -- no route to host
+    assert len(netif.driver.packets) == 0
+
+    # Re attach netif and ensure it can get traffic again
+    add_netif(netif)
+
+    netif.driver.packets = []
+
+    assert len(netif.driver.packets) == 0
+    send_udp()
+    assert len(netif.driver.packets) == 1
 
 
 if __name__ == "__main__":
