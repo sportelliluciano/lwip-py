@@ -1,0 +1,2 @@
+PBUF_RAW = 0
+PBUF_RAM = 640

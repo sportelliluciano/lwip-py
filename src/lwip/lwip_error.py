@@ -1,0 +1,2 @@
+class LwipError(Exception):
+    pass
